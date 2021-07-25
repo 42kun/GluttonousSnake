@@ -5,6 +5,7 @@ using System.Text;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
+using System.Media;
 
 namespace GluttonousSnake
 {
@@ -19,8 +20,8 @@ namespace GluttonousSnake
     class Game
     {
         //config
-        const int panelLength = 30;
-        const int panelHeight = 20;
+        const int panelLength = 10;
+        const int panelHeight = 10;
         const char frameElem1 = '■';
         const char frameElem2 = '□';
         const char snakeElem = '●';
@@ -29,6 +30,7 @@ namespace GluttonousSnake
         const int init_snake_length = 3;
         const int init_react_space = 2;
         const int update_time_span = 200;
+        const int food_score = 10;
 
         //panelData
         enum PanelDirection:byte
@@ -106,6 +108,7 @@ namespace GluttonousSnake
         bool pause_flag = false;
         //控制队列，用来简化操作
         Queue<PanelDirection> input_que = new Queue<PanelDirection>();
+        SoundPlayer soundp;
         
         enum Operation : byte
         {
@@ -166,6 +169,11 @@ namespace GluttonousSnake
 
             //disable resize window
             BanConSoleResizeTool bnt = new BanConSoleResizeTool();
+
+            //load sound
+            soundp = new SoundPlayer();
+            soundp.SoundLocation = "sound.wav";
+            soundp.Load();
         }
 
         void Initial_panelData()
@@ -226,8 +234,12 @@ namespace GluttonousSnake
             //Console.Clear();
             Console.WriteLine('\r');
             StringBuilder panel_string = new StringBuilder();
-            //TODO:有待于格式化输出
-            panel_string.Append(this.score.ToString() + "\n");
+            //输出分数
+            for(int i = 0; i < ((panelLength+2)*2-14)/2; i++)
+            {
+                panel_string.Append(" ");
+            }
+            panel_string.Append(string.Format("SCORE : {0:00000}\n", this.score));
             for (int i = 0; i < panelHeight + 2; i++)
             {
                 for (int j = 0; j < panelLength + 2; j++)
@@ -304,6 +316,9 @@ namespace GluttonousSnake
             DateTime nt = DateTime.Now;
             //统计时间间隔
             int tsp;
+            //暂停检测
+            bool pause_has_change = true;
+            bool draw_pause_flag = false;
             do
             {
                 Operation t = GetNextDirection();
@@ -311,9 +326,13 @@ namespace GluttonousSnake
                 if (t == Operation.Up || t == Operation.Down || t == Operation.Left || t == Operation.Right)
                 {
                     instant_input_direction = (PanelDirection)t;
+                    pause_has_change = true;
+                    draw_pause_flag = false;
                 }
                 else if (t == Operation.Esc)
                 {
+                    Console.Clear();
+                    DrawGame();
                     Draw_Hit("End!");
                     Thread.Sleep(2000);
                     Environment.Exit(0);
@@ -325,6 +344,31 @@ namespace GluttonousSnake
                 else if (t == Operation.Pause)
                 {
                     //检查是刚按下的暂停键，还是陈旧的暂停键？
+                    if (pause_has_change)
+                    {
+                        pause_has_change = false;
+                        //已经暂停了
+                        if (this.pause_flag)
+                        {
+                            //解除暂停
+                            draw_pause_flag = false;
+                        }
+                        else
+                        {
+                            //暂停
+                            if (!draw_pause_flag)
+                            {
+                                Draw_Hit("Pause!");
+                                draw_pause_flag = true;
+                            }
+                            continue;
+                        }
+
+                    }
+                    else
+                    {
+                        continue;
+                    }
 
                 }
                 tsp = Convert.ToInt32((DateTime.Now - nt).TotalMilliseconds);
@@ -379,17 +423,36 @@ namespace GluttonousSnake
                         Point new_foold = GenerateFood();
                         this.panel_datas[new_foold.x, new_foold.y].isFood = true;
 
+                        //加分，播放声音
+                        this.score += food_score;
+                        this.soundp.Play();
                     }
                     this.DrawGame();
                 }
 
             } while (!end_flag);
+            if (end_flag)
+            {
+                if (this.empty_point.Count() == 0)
+                {
+                    Draw_Hit("Success!");
+                }
+                else
+                {
+                    Draw_Hit("Fail!");
+                }
+                Console.ReadKey();
+            }
         }
         //绘制提示符
         private void Draw_Hit(string msg)
         {
             int msg_count = msg.Length+2;
             int start_x = panelLength + 2 - msg_count;
+            if (start_x % 2 != 0)
+            {
+                start_x += 1;
+            }
             int start_y = panelHeight/2;
             Console.SetCursorPosition(start_x, start_y);
             StringBuilder st = new StringBuilder();
